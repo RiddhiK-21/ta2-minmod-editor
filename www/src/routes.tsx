@@ -36,6 +36,11 @@ export const routes = {
     pathDef: `${PUBLIC_URL}/mineral-site`,
     exact: true,
   }),
+  byproduct: new NoURLArgsPathDef({
+    component: () => <IFrame relurl="/dashboard/byproduct" />,
+    pathDef: `${PUBLIC_URL}/byproduct`,
+    exact: true,
+  }),
   editor: new NoURLArgsPathDef({
     component: EditorPage,
     pathDef: `${PUBLIC_URL}/editor`,
@@ -73,6 +78,11 @@ export const extendedRoutes: Record<keyof typeof routes, ExtendedRoute> = {
   mineralSite: {
     name: "Mineral Site Data",
     route: routes.mineralSite,
+    role: Role.Public,
+  },
+  byproduct: {
+    name: "By-Product Data",
+    route: routes.byproduct,
     role: Role.Public,
   },
   editor: {

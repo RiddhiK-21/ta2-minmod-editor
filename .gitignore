@@ -163,3 +163,5 @@ cython_debug/
 .DS_Store
 minmod_editor/www
 .yalc
+
+.claude
