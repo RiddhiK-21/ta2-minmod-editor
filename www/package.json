@@ -24,7 +24,9 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start",
+    "// start (local-only, revert before PR)": "NODE_OPTIONS=--use-system-ca makes Node trust the macOS system CA store, needed on networks that SSL-inspect traffic (e.g. campus VPN) so the /api proxy to https://minmod.isi.edu doesn't fail with UNABLE_TO_VERIFY_LEAF_SIGNATURE. Restore the line below before opening a PR.",
+    "start": "NODE_OPTIONS=--use-system-ca react-scripts start",
+    "_start_original": "react-scripts start",
     "build": "python ./scripts/build.py ../minmod_editor/www",
     "test": "react-scripts test",
     "eject": "react-scripts eject"

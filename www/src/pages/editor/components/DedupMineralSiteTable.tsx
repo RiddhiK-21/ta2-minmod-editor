@@ -260,6 +260,8 @@ export const DedupMineralSiteTable: React.FC<DedupMineralSiteTableProps> = obser
             return (
               <div className={isEdited ? styles.cellHighlight : ""}>
                 <Typography.Link href={`/derived/${site.origin.id}`} target="_blank">
+                {/*<Typography.Link href={site.origin.uri} target="_blank">*/}
+                {/* site.origin.uri is already the full https://minmod.isi.edu/derived/{id} URL; the relative path above resolved against localhost instead of the hosted API */}
                   <Highlight text={site.origin.name || "␣"} searchText={nameSearchText} />
                 </Typography.Link>
                 &nbsp;
