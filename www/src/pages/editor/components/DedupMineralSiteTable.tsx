@@ -20,6 +20,7 @@ import {
   CheckCircleOutlined,
   CheckOutlined,
   EditOutlined,
+  EyeOutlined,
   PlusOutlined,
   SearchOutlined,
   UngroupOutlined,
@@ -40,6 +41,8 @@ interface DedupMineralSiteTableProps {
   depositType?: DepositType;
   country?: Country;
   stateOrProvince?: StateOrProvince;
+  // when true, the table is view-only: rows can still be expanded, but nothing can be changed
+  readonly?: boolean;
 }
 
 const emptyFetchResult = { records: [], total: 0 };
@@ -65,7 +68,7 @@ const getUniqueRank = (sites: DedupMineralSite[]) => {
 };
 
 export const DedupMineralSiteTable: React.FC<DedupMineralSiteTableProps> = observer(
-  ({ commodity, depositType, country, stateOrProvince }) => {
+  ({ commodity, depositType, country, stateOrProvince, readonly }) => {
     const { dedupMineralSiteStore, depositTypeStore, countryStore, stateOrProvinceStore, settingStore } = useStores();
     const [editingDedupSite, setEditingDedupSite] = useState<string | undefined>(undefined);
     const [selectedDedupSiteIds, setSelectedDedupSiteIds] = useState<Set<string>>(new Set());
@@ -495,7 +498,7 @@ export const DedupMineralSiteTable: React.FC<DedupMineralSiteTableProps> = obser
                 <Button
                   color="primary"
                   size="middle"
-                  icon={<EditOutlined />}
+                  icon={readonly ? <EyeOutlined /> : <EditOutlined />}
                   variant="filled"
                   onClick={() => {
                     if (site.origin.id === editingDedupSite) {
@@ -505,9 +508,9 @@ export const DedupMineralSiteTable: React.FC<DedupMineralSiteTableProps> = obser
                     }
                   }}
                 >
-                  Edit
+                  {readonly ? "View" : "Edit"}
                 </Button>
-                <ConfirmDataButton dedupSite={site.origin} commodity={commodity!} />
+                {!readonly && <ConfirmDataButton dedupSite={site.origin} commodity={commodity!} />}
               </Space>
             );
           },
@@ -532,6 +535,7 @@ export const DedupMineralSiteTable: React.FC<DedupMineralSiteTableProps> = obser
       typeSearchText,
       rankSearchText,
       scrollX,
+      readonly,
     ]);
 
     const toggleSelectSite = (site: FormattedDedupMineralSite) => {
@@ -544,21 +548,24 @@ export const DedupMineralSiteTable: React.FC<DedupMineralSiteTableProps> = obser
       setSelectedDedupSiteIds(newSelectedDedupSiteIds);
     };
 
-    columns = [
-      {
-        title: "",
-        key: "group",
-        render: (_: any, site: FormattedDedupMineralSite) => (
-          <Checkbox
-            type="primary"
-            checked={selectedDedupSiteIds.has(site.origin.id)}
-            onClick={() => toggleSelectSite(site)}
-          />
-        ),
-        fixed: scrollX ? "left" : undefined,
-      },
-      ...columns,
-    ];
+    // the leading checkbox column only drives grouping, which is an edit action
+    if (!readonly) {
+      columns = [
+        {
+          title: "",
+          key: "group",
+          render: (_: any, site: FormattedDedupMineralSite) => (
+            <Checkbox
+              type="primary"
+              checked={selectedDedupSiteIds.has(site.origin.id)}
+              onClick={() => toggleSelectSite(site)}
+            />
+          ),
+          fixed: scrollX ? "left" : undefined,
+        },
+        ...columns,
+      ];
+    }
 
     const handleGroup = async () => {
       const prevIds = Array.from(selectedDedupSiteIds);
@@ -588,7 +595,7 @@ export const DedupMineralSiteTable: React.FC<DedupMineralSiteTableProps> = obser
 
     return (
       <>
-        {selectedDedupSites.length > 0 ? (
+        {!readonly && selectedDedupSites.length > 0 ? (
           <>
             <div>
               <Button
@@ -626,7 +633,7 @@ export const DedupMineralSiteTable: React.FC<DedupMineralSiteTableProps> = obser
           expandable={{
             expandedRowRender: (site) => {
               if (editingDedupSite === site.origin.id) {
-                return <EditDedupMineralSite commodity={commodity!} dedupSite={site.origin} />;
+                return <EditDedupMineralSite commodity={commodity!} dedupSite={site.origin} readonly={readonly} />;
               }
               return null;
             },

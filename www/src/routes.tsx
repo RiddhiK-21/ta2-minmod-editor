@@ -1,5 +1,5 @@
 import { NoArgsPathDef, NoURLArgsPathDef, applyLayout } from "gena-app";
-import { EditorPage, LoginPage } from "./pages";
+import { EditorPage, ViewerPage, LoginPage } from "./pages";
 import { ExtendedRoute, Layout } from "./components/Layout";
 import { Role } from "./components/RequiredAuthentication";
 import { PUBLIC_URL } from "./env";
@@ -52,6 +52,17 @@ export const routes = {
       stateOrProvince: "optionalstring",
     },
   }),
+  viewer: new NoURLArgsPathDef({
+    component: ViewerPage,
+    pathDef: `${PUBLIC_URL}/viewer`,
+    exact: true,
+    querySchema: {
+      commodity: "optionalstring",
+      depositType: "optionalstring",
+      country: "optionalstring",
+      stateOrProvince: "optionalstring",
+    },
+  }),
 };
 
 (window as any)._routes = routes;
@@ -88,6 +99,11 @@ export const extendedRoutes: Record<keyof typeof routes, ExtendedRoute> = {
   editor: {
     name: "MinMod Editor",
     route: routes.editor,
+    role: Role.User,
+  },
+  viewer: {
+    name: "MinMod View",
+    route: routes.viewer,
     role: Role.User,
   },
 };

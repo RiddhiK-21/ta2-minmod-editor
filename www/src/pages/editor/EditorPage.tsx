@@ -3,10 +3,11 @@ import { observer } from "mobx-react-lite";
 import { SearchBar, useSearchArgs } from "./components/SearchBar";
 import { DedupMineralSiteTable } from "./components/DedupMineralSiteTable";
 import { useRef } from "react";
+import { routes } from "routes";
 import { NewMineralSiteModal, NewMineralSiteFormRef } from "./subpages/NewMineralSiteModal";
 
 export const EditorPage = observer(() => {
-  const [searchArgs, normSearchArgs, setSearchArgs] = useSearchArgs();
+  const [searchArgs, normSearchArgs, setSearchArgs] = useSearchArgs(routes.editor);
   const newMineralSiteFormRef = useRef<NewMineralSiteFormRef>(null);
   const handleOpenNewMineralSiteForm = () => {
     if (newMineralSiteFormRef.current != null || newMineralSiteFormRef.current != undefined) {

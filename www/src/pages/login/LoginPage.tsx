@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { routes } from "routes";
 import { useStores } from "models";
 import { useNavigate } from "react-router";
+import { takeRedirectAfterLogin } from "components/RequiredAuthentication";
 import { Button, Form, Input, FormProps, Alert } from "antd";
 
 type LoginData = {
@@ -15,17 +16,27 @@ export const LoginPage = () => {
 
   const [error, setError] = useState<string>("");
 
+  // return to whichever page bounced the user here, falling back to the editor
+  const redirectAfterLogin = useCallback(() => {
+    const next = takeRedirectAfterLogin();
+    if (next !== undefined) {
+      navigate(next);
+      return;
+    }
+    routes.editor.path({ queryArgs: { commodity: undefined, depositType: undefined, country: undefined, stateOrProvince: undefined } }).open(navigate);
+  }, [navigate]);
+
   useEffect(() => {
     userStore.isLoggedIn().then((isLoggedIn) => {
-      if (isLoggedIn) routes.editor.path({ queryArgs: { commodity: undefined, depositType: undefined, country: undefined, stateOrProvince: undefined } }).open(navigate);
+      if (isLoggedIn) redirectAfterLogin();
     });
-  }, [userStore, navigate]);
+  }, [userStore, redirectAfterLogin]);
 
   const onFinish: FormProps<LoginData>["onFinish"] = async (values: LoginData) => {
     if (values.username !== undefined && values.password !== undefined) {
       try {
         await userStore.login(values.username, values.password);
-        routes.editor.path({ queryArgs: { commodity: undefined, depositType: undefined, country: undefined, stateOrProvince: undefined } }).open(navigate);
+        redirectAfterLogin();
       } catch (err: any) {
         if (err.response?.status === 401) {
           setError("Username or password is wrong.");
