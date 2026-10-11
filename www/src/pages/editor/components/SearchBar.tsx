@@ -34,7 +34,7 @@ export interface NormSearchArgs {
   stateOrProvince?: StateOrProvince;
 }
 
-// the page that owns the search bar -- either routes.editor or routes.viewer, which share the same query schema
+// the page that owns the search bar; its query schema must match the four search filters
 export type SearchRoute = typeof routes.editor;
 
 export function useSearchArgs(route: SearchRoute): [SearchArgs, NormSearchArgs, (newArgs: SearchArgs) => void] {

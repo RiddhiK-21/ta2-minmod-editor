@@ -86,7 +86,7 @@ class SelectedSites {
 export const EditDedupMineralSite = observer(({ dedupSite, commodity, readonly }: EditDedupMineralSiteProps) => {
   const stores = useStores();
   const { mineralSiteStore, userStore, dedupMineralSiteStore, settingStore } = stores;
-  const user = userStore.getCurrentUser()!;
+  const user = userStore.getCurrentUser();
 
   const [editField, setEditField] = useState<EditableField | undefined>(undefined);
   const [selectedRows, setSelectedRows] = useState<SelectedSites>(new SelectedSites());
@@ -482,7 +482,7 @@ export const EditDedupMineralSite = observer(({ dedupSite, commodity, readonly }
     fetchData();
   }, [dedupSite.sites, mineralSiteStore]);
 
-  const currentSite = siteGroups.sites.find((site) => site.createdBy == user.url);
+  const currentSite = user === undefined ? undefined : siteGroups.sites.find((site) => site.createdBy === user.url);
 
   let groupBtns = undefined;
   if (!readonly && siteGroups.nGroups > 1 && selectedRows.groups.size > 0) {
@@ -530,7 +530,8 @@ export const EditDedupMineralSite = observer(({ dedupSite, commodity, readonly }
         dataSource={siteGroups.sites}
         loading={isLoading}
         rowClassName={(site) => {
-          return site.createdBy.includes(userStore.getCurrentUser()!.url) ? styles.myEditedRow : "";
+          if (user === undefined) return "";
+          return site.createdBy.includes(user.url) ? styles.myEditedRow : "";
         }}
         expandable={{
           expandedRowRender: (site) => {
