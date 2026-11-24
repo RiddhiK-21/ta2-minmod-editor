@@ -1,4 +1,6 @@
-import { Country, DedupMineralSite, DepositType, StateOrProvince, useStores } from "models";
+import { DedupMineralSite, useStores } from "models";
+import { filterSites, SiteFilter } from "models/dedupMineralSite";
+import { InternalID } from "models/typing";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { Commodity } from "models/commodity";
@@ -38,9 +40,10 @@ import { ConfirmDataButton } from "./ConfirmDataButton";
 
 interface DedupMineralSiteTableProps {
   commodity?: Commodity;
-  depositType?: DepositType;
-  country?: Country;
-  stateOrProvince?: StateOrProvince;
+  // deposit type, country and state/province filters, applied to the commodity's sites in the browser
+  filter: SiteFilter;
+  // called with the ids of the sites shown in the table, after all filters
+  onVisibleSitesChange?: (ids: InternalID[]) => void;
   // when true, the table is view-only: rows can still be expanded, but nothing can be changed
   readonly?: boolean;
 }
@@ -68,7 +71,7 @@ const getUniqueRank = (sites: DedupMineralSite[]) => {
 };
 
 export const DedupMineralSiteTable: React.FC<DedupMineralSiteTableProps> = observer(
-  ({ commodity, depositType, country, stateOrProvince, readonly }) => {
+  ({ commodity, filter: siteFilter, onVisibleSitesChange, readonly }) => {
     const { dedupMineralSiteStore, depositTypeStore, countryStore, stateOrProvinceStore, settingStore } = useStores();
     const [editingDedupSite, setEditingDedupSite] = useState<string | undefined>(undefined);
     const [selectedDedupSiteIds, setSelectedDedupSiteIds] = useState<Set<string>>(new Set());
@@ -79,18 +82,16 @@ export const DedupMineralSiteTable: React.FC<DedupMineralSiteTableProps> = obser
 
     useEffect(() => {
       if (commodity !== undefined) {
-        dedupMineralSiteStore.searchAndCache(commodity, depositType, country, stateOrProvince);
+        dedupMineralSiteStore.searchAndCache(commodity);
       }
-    }, [commodity, depositType, country, stateOrProvince]);
+    }, [commodity]);
 
     const isLoading = dedupMineralSiteStore.state.value === "updating";
     const dedupMineralSites =
-      commodity === undefined
-        ? emptyFetchResult
-        : dedupMineralSiteStore.getCacheSearchResult(commodity, depositType, country, stateOrProvince);
+      commodity === undefined ? emptyFetchResult : dedupMineralSiteStore.getCacheSearchResult(commodity);
 
     const filteredDedupMineralSites = useMemo(() => {
-      let lstdms = dedupMineralSites.records;
+      let lstdms = filterSites(dedupMineralSites.records, siteFilter);
       if (nameFilterFn !== undefined) {
         lstdms = nameFilterFn(lstdms);
       }
@@ -100,8 +101,14 @@ export const DedupMineralSiteTable: React.FC<DedupMineralSiteTableProps> = obser
       if (rankFilterFn !== undefined) {
         lstdms = rankFilterFn(lstdms);
       }
-      return { records: lstdms, total: dedupMineralSites.total };
-    }, [dedupMineralSites, nameFilterFn, typeFilterFn, rankFilterFn]);
+      return { records: lstdms, total: lstdms.length };
+    }, [dedupMineralSites, siteFilter, nameFilterFn, typeFilterFn, rankFilterFn]);
+
+    // the filtered list is a new array on every render, so compare the ids as a string to report only real changes
+    const visibleSiteKey = filteredDedupMineralSites.records.map((site) => site.id).join(",");
+    useEffect(() => {
+      onVisibleSitesChange?.(visibleSiteKey === "" ? [] : visibleSiteKey.split(","));
+    }, [visibleSiteKey, onVisibleSitesChange]);
 
     const allFormattedList = useFormattedDedupMineralSite(filteredDedupMineralSites.records);
 

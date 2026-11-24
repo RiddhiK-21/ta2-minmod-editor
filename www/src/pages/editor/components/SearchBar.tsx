@@ -1,6 +1,8 @@
-import { Button, Flex, Input, Modal, Select, Space, Typography, Checkbox, Form } from "antd";
+import { Button, Flex, Input, Modal, Select, Space, Typography, Checkbox, Form, Tooltip } from "antd";
 import _ from "lodash";
 import { useStores, Commodity, IStore, Country, StateOrProvince, DepositType } from "models";
+import { getFilterOptions, SiteFilter } from "models/dedupMineralSite";
+import { InternalID, IRI } from "models/typing";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { routes } from "routes";
@@ -16,22 +18,55 @@ interface SearchBarProps {
   setSearchArgs: (args: SearchArgs) => void;
   onOpenNewMineralSiteForm: () => void;
   normSearchArgs: NormSearchArgs;
+  // ids of the sites shown in the table, which is what the Download button saves
+  visibleSiteIds: InternalID[];
   // when true, hide the controls that create or modify data (view-only pages)
   readonly?: boolean;
 }
 
+// option values for sites without a deposit type or without a country. No real deposit type or
+// country has these names, so they can be stored in the URL like any other name.
+export const UNKNOWN_DEPOSIT_TYPE = "Unknown";
+export const BLANK_COUNTRY = "(blank)";
+
+// the URL keeps one string per filter (repeated keys keep only the last value), so several
+// values are joined with this. Some names contain commas, none contain "|".
+const VALUE_SEPARATOR = "|";
+
 interface SearchArgs {
   commodity?: string;
-  depositType?: string;
-  country?: string;
+  depositTypes: string[];
+  countries: string[];
   stateOrProvince?: string;
 }
 
 export interface NormSearchArgs {
   commodity?: Commodity;
-  depositType?: DepositType;
-  country?: Country;
+  // null is the "Unknown" deposit type / the "(blank)" country
+  depositTypes: (DepositType | null)[];
+  countries: (Country | null)[];
   stateOrProvince?: StateOrProvince;
+}
+
+const splitValues = (value?: string): string[] => {
+  return value === undefined ? [] : _.uniq(value.split(VALUE_SEPARATOR).filter((v) => v !== ""));
+};
+
+const joinValues = (values: string[]): string | undefined => {
+  return values.length === 0 ? undefined : values.join(VALUE_SEPARATOR);
+};
+
+// true when the store is loaded and has no record with this name
+const isUnknownName = (store: { records: Map<any, any>; getByName(name: string): any }, name: string) => {
+  return store.records.size > 0 && (store.getByName(name) ?? null) === null;
+};
+
+export function getSiteFilter(normArgs: NormSearchArgs): SiteFilter {
+  return {
+    depositTypes: normArgs.depositTypes.map((depositType) => (depositType === null ? null : depositType.uri)),
+    countries: normArgs.countries.map((country) => (country === null ? null : country.uri)),
+    stateOrProvince: normArgs.stateOrProvince?.uri,
+  };
 }
 
 export function useSearchArgs(): [SearchArgs, NormSearchArgs, (newArgs: SearchArgs) => void] {
@@ -41,8 +76,8 @@ export function useSearchArgs(): [SearchArgs, NormSearchArgs, (newArgs: SearchAr
 
   const [args, setArgs] = useState<SearchArgs>({
     commodity: undefined,
-    depositType: undefined,
-    country: undefined,
+    depositTypes: [],
+    countries: [],
     stateOrProvince: undefined,
   });
 
@@ -52,9 +87,9 @@ export function useSearchArgs(): [SearchArgs, NormSearchArgs, (newArgs: SearchAr
       .path({
         queryArgs: {
           commodity: newArgs.commodity,
-          depositType: newArgs.depositType,
+          depositType: joinValues(newArgs.depositTypes),
           stateOrProvince: newArgs.stateOrProvince,
-          country: newArgs.country,
+          country: joinValues(newArgs.countries),
         },
       })
       .open(navigate);
@@ -62,44 +97,23 @@ export function useSearchArgs(): [SearchArgs, NormSearchArgs, (newArgs: SearchAr
 
   // sync with queries in the URL
   useEffect(() => {
-    const newArgs = {
+    const newArgs: SearchArgs = {
       commodity: queryParams?.commodity,
-      depositType: queryParams?.depositType,
-      country: queryParams?.country,
+      depositTypes: splitValues(queryParams?.depositType).filter(
+        (name) => name === UNKNOWN_DEPOSIT_TYPE || !isUnknownName(depositTypeStore, name)
+      ),
+      countries: splitValues(queryParams?.country).filter((name) => name === BLANK_COUNTRY || !isUnknownName(countryStore, name)),
       stateOrProvince: queryParams?.stateOrProvince,
     };
 
-    if (newArgs.commodity !== undefined) {
-      const commodity = commodityStore.getByName(newArgs.commodity);
-      if (commodity === null) {
-        // does not exist
-        newArgs.commodity = undefined;
-      }
+    if (newArgs.commodity !== undefined && isUnknownName(commodityStore, newArgs.commodity)) {
+      newArgs.commodity = undefined;
     }
 
-    if (newArgs.depositType !== undefined) {
-      const depositType = depositTypeStore.getByName(newArgs.depositType);
-      if (depositType === null) {
-        // does not exist
-        newArgs.depositType = undefined;
-      }
+    if (newArgs.stateOrProvince !== undefined && isUnknownName(stateOrProvinceStore, newArgs.stateOrProvince)) {
+      newArgs.stateOrProvince = undefined;
     }
 
-    if (newArgs.country !== undefined) {
-      const country = countryStore.getByName(newArgs.country);
-      if (country === null) {
-        // does not exist
-        newArgs.country = undefined;
-      }
-    }
-
-    if (newArgs.stateOrProvince !== undefined) {
-      const stateOrProvince = stateOrProvinceStore.getByName(newArgs.stateOrProvince);
-      if (stateOrProvince === null) {
-        // does not exist
-        newArgs.stateOrProvince = undefined;
-      }
-    }
     if (!_.isEqual(newArgs, args)) {
       updateSearchArgs(newArgs);
     }
@@ -117,8 +131,8 @@ export function useSearchArgs(): [SearchArgs, NormSearchArgs, (newArgs: SearchAr
   const normArgs: NormSearchArgs = useMemo(() => {
     const output: NormSearchArgs = {
       commodity: undefined,
-      depositType: undefined,
-      country: undefined,
+      depositTypes: [],
+      countries: [],
       stateOrProvince: undefined,
     };
 
@@ -135,17 +149,17 @@ export function useSearchArgs(): [SearchArgs, NormSearchArgs, (newArgs: SearchAr
       }
     }
 
-    if (args.depositType !== undefined) {
-      const depositType = depositTypeStore.getByName(args.depositType);
-      if (depositType !== null && depositType !== undefined) {
-        output.depositType = depositType;
+    for (const name of args.depositTypes) {
+      const depositType = name === UNKNOWN_DEPOSIT_TYPE ? null : depositTypeStore.getByName(name);
+      if (depositType !== undefined) {
+        output.depositTypes.push(depositType);
       }
     }
 
-    if (args.country !== undefined) {
-      const country = countryStore.getByName(args.country);
-      if (country !== null && country !== undefined) {
-        output.country = country;
+    for (const name of args.countries) {
+      const country = name === BLANK_COUNTRY ? null : countryStore.getByName(name);
+      if (country !== undefined) {
+        output.countries.push(country);
       }
     }
 
@@ -162,8 +176,50 @@ export function useSearchArgs(): [SearchArgs, NormSearchArgs, (newArgs: SearchAr
   return [args, normArgs, updateSearchArgs];
 }
 
-export const SearchBar: React.FC<SearchBarProps> = observer(({ searchArgs, setSearchArgs, onOpenNewMineralSiteForm, normSearchArgs, readonly }) => {
-  const { commodityStore, countryStore, stateOrProvinceStore, depositTypeStore, settingStore } = useStores();
+/**
+ * Dropdown options for the given values, sorted by name with the "no value" option last.
+ * Selected names that are no longer among the values stay in the list so they remain visible.
+ */
+const getOptions = (
+  values: Set<IRI | null>,
+  getByURI: (uri: IRI) => { name: string } | undefined,
+  selected: string[],
+  noValueName?: string
+) => {
+  const names = new Set<string>();
+  let hasNoValue = false;
+  for (const value of values) {
+    if (value === null) {
+      hasNoValue = true;
+    } else {
+      const name = getByURI(value)?.name;
+      if (name !== undefined) names.add(name);
+    }
+  }
+  for (const name of selected) {
+    if (name === noValueName) {
+      hasNoValue = true;
+    } else {
+      names.add(name);
+    }
+  }
+
+  const options = Array.from(names)
+    .sort((a, b) => a.localeCompare(b))
+    .map((name) => ({ value: name, label: name }));
+  if (hasNoValue && noValueName !== undefined) {
+    options.push({ value: noValueName, label: noValueName });
+  }
+  return options;
+};
+
+// the multi-selects fold the chips that don't fit into "+ N ..."; hovering it lists those values
+const renderOmittedValues = (omitted: { label?: React.ReactNode }[]) => (
+  <Tooltip title={omitted.map((value) => value.label).join(", ")}>+ {omitted.length} ...</Tooltip>
+);
+
+export const SearchBar: React.FC<SearchBarProps> = observer(({ searchArgs, setSearchArgs, onOpenNewMineralSiteForm, normSearchArgs, visibleSiteIds, readonly }) => {
+  const { commodityStore, countryStore, stateOrProvinceStore, depositTypeStore, settingStore, dedupMineralSiteStore } = useStores();
 
   const commodityOptions = useMemo(() => {
     return commodityStore.getCriticalCommodities().map((comm) => {
@@ -174,32 +230,22 @@ export const SearchBar: React.FC<SearchBarProps> = observer(({ searchArgs, setSe
     });
   }, [commodityStore.records.size]);
 
-  const depositTypeOptions = useMemo(() => {
-    return depositTypeStore.list.map((ent) => {
-      return {
-        value: ent.id,
-        label: ent.name,
-      };
-    });
-  }, [depositTypeStore.records.size]);
+  // like the dashboard's Mineral Site tab, only offer values found in the commodity's sites
+  const sites = normSearchArgs.commodity === undefined ? [] : dedupMineralSiteStore.getCacheSearchResult(normSearchArgs.commodity).records;
+  const filterOptions = getFilterOptions(sites, getSiteFilter(normSearchArgs));
 
-  const countryOptions = useMemo(() => {
-    return countryStore.list.map((ent) => {
-      return {
-        value: ent.id,
-        label: ent.name,
-      };
-    });
-  }, [countryStore.records.size]);
-
-  const stateOrProvinceOptions = useMemo(() => {
-    return stateOrProvinceStore.list.map((ent) => {
-      return {
-        value: ent.id,
-        label: ent.name,
-      };
-    });
-  }, [stateOrProvinceStore.records.size]);
+  const depositTypeOptions = getOptions(
+    filterOptions.depositTypes,
+    (uri) => depositTypeStore.getByURI(uri),
+    searchArgs.depositTypes,
+    UNKNOWN_DEPOSIT_TYPE
+  );
+  const countryOptions = getOptions(filterOptions.countries, (uri) => countryStore.getByURI(uri), searchArgs.countries, BLANK_COUNTRY);
+  const stateOrProvinceOptions = getOptions(
+    filterOptions.statesOrProvinces,
+    (uri) => stateOrProvinceStore.getByURI(uri),
+    searchArgs.stateOrProvince === undefined ? [] : [searchArgs.stateOrProvince]
+  );
 
   return (
     <Flex gap="small" justify="space-between" align="center">
@@ -223,32 +269,38 @@ export const SearchBar: React.FC<SearchBarProps> = observer(({ searchArgs, setSe
         />
         <Typography.Text className={styles.label}>Deposit Type:</Typography.Text>
         <Select
-          style={{ width: 200 }}
+          mode="multiple"
+          style={{ width: 250 }}
           allowClear={true}
-          value={searchArgs.depositType}
-          placeholder="Select a deposit type"
+          value={searchArgs.depositTypes}
+          placeholder="Select deposit types"
           showSearch={true}
           optionFilterProp="label"
-          onChange={(id?: string) =>
+          maxTagCount="responsive"
+          maxTagPlaceholder={renderOmittedValues}
+          onChange={(names: string[]) =>
             setSearchArgs({
               ...searchArgs,
-              depositType: id === undefined ? undefined : depositTypeStore.get(id)!.name,
+              depositTypes: names,
             })
           }
           options={depositTypeOptions}
         />
         <Typography.Text className={styles.label}>Country:</Typography.Text>
         <Select
-          style={{ width: 150 }}
+          mode="multiple"
+          style={{ width: 200 }}
           allowClear={true}
-          value={searchArgs.country}
-          placeholder="Select a country"
+          value={searchArgs.countries}
+          placeholder="Select countries"
           showSearch={true}
           optionFilterProp="label"
-          onChange={(id?: string) =>
+          maxTagCount="responsive"
+          maxTagPlaceholder={renderOmittedValues}
+          onChange={(names: string[]) =>
             setSearchArgs({
               ...searchArgs,
-              country: id === undefined ? undefined : countryStore.get(id)!.name,
+              countries: names,
             })
           }
           options={countryOptions}
@@ -261,10 +313,10 @@ export const SearchBar: React.FC<SearchBarProps> = observer(({ searchArgs, setSe
           placeholder="Select a state/province"
           showSearch={true}
           optionFilterProp="label"
-          onChange={(id?: string) =>
+          onChange={(name?: string) =>
             setSearchArgs({
               ...searchArgs,
-              stateOrProvince: id === undefined ? undefined : stateOrProvinceStore.get(id)!.name,
+              stateOrProvince: name,
             })
           }
           options={stateOrProvinceOptions}
@@ -278,7 +330,7 @@ export const SearchBar: React.FC<SearchBarProps> = observer(({ searchArgs, setSe
         )}
         <Button type="primary" icon={<SettingOutlined />} onClick={() => settingStore.showSetting()}></Button>
         <AddFieldModal />
-        <DownloadButton normSearchArgs={normSearchArgs} />
+        <DownloadButton commodity={normSearchArgs.commodity} visibleSiteIds={visibleSiteIds} />
       </Space>
     </Flex>
   );

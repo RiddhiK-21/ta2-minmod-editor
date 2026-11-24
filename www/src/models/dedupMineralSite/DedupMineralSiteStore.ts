@@ -7,15 +7,11 @@ import { action, makeObservable, observable, runInAction } from "mobx";
 import { NamespaceManager } from "../Namespace";
 import { GradeTonnage } from "../mineralSite";
 import { InternalID } from "../typing";
-import { StateOrProvince } from "models/stateOrProvince";
-import { Country, DepositType } from "models";
 import { GeologyInfo } from "models/mineralSite/GeologyInfo";
 
+// the server is only asked for a commodity's sites; the other filters are applied in the browser (see SiteFilter)
 interface SearchCondition {
   commodity: InternalID;
-  deposit_type?: InternalID;
-  country?: InternalID;
-  state_or_province?: InternalID;
 }
 
 class CacheSearchResult {
@@ -34,22 +30,14 @@ class CacheSearchResult {
     });
   }
 
-  public static getCondition(commodity: Commodity, depositType?: DepositType, country?: Country, stateOrProvince?: StateOrProvince) {
+  public static getCondition(commodity: Commodity): SearchCondition {
     return {
       commodity: commodity.id,
-      deposit_type: depositType?.id,
-      country: country?.id,
-      state_or_province: stateOrProvince?.id,
     };
   }
 
   public matchCondition(condition: SearchCondition): boolean {
-    return (
-      this.condition.commodity === condition.commodity &&
-      this.condition.deposit_type === condition.deposit_type &&
-      this.condition.country === condition.country &&
-      this.condition.state_or_province === condition.state_or_province
-    );
+    return this.condition.commodity === condition.commodity;
   }
 
   public replaceSites(prevIds: Set<InternalID>, newIds: InternalID[]): number {
@@ -176,8 +164,8 @@ export class DedupMineralSiteStore extends RStore<string, DedupMineralSite> {
     }
   }
 
-  async searchAndCache(commodity: Commodity, depositType?: DepositType, country?: Country, stateOrProvince?: StateOrProvince) {
-    const conditions = CacheSearchResult.getCondition(commodity, depositType, country, stateOrProvince);
+  async searchAndCache(commodity: Commodity) {
+    const conditions = CacheSearchResult.getCondition(commodity);
 
     // skip if we already have the results in cache
     if (this.searchResults.some((result) => result.matchCondition(conditions))) {
@@ -209,11 +197,9 @@ export class DedupMineralSiteStore extends RStore<string, DedupMineralSite> {
    * Get search results from cache. Return empty if not found
    *
    * @param commodity
-   * @param country
-   * @param stateOrProvince
    */
-  public getCacheSearchResult(commodity: Commodity, depositType?: DepositType, country?: Country, stateOrProvince?: StateOrProvince): FetchResult<DedupMineralSite> {
-    const conditions = CacheSearchResult.getCondition(commodity, depositType, country, stateOrProvince);
+  public getCacheSearchResult(commodity: Commodity): FetchResult<DedupMineralSite> {
+    const conditions = CacheSearchResult.getCondition(commodity);
 
     for (const result of this.searchResults) {
       if (result.matchCondition(conditions)) {
